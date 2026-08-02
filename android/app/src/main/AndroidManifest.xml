@@ -42,5 +42,10 @@
             android:foregroundServiceType="phoneCall"
             android:exported="false" />
 
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
+
     </application>
 </manifest>
