@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:callio/themes/design_system.dart';
 
 void main() {
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+    ),
+  );
   runApp(
     const ProviderScope(
       child: CallioApp(),
@@ -9,23 +17,80 @@ void main() {
   );
 }
 
-class CallioApp extends StatelessWidget {
+class CallioApp extends ConsumerWidget {
   const CallioApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final textTheme = CallioDesign.getTextTheme(context);
+    
+    // Using a sophisticated indigo seed color for the premium feel
+    final lightScheme = ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5), brightness: Brightness.light);
+    final darkScheme = ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5), brightness: Brightness.dark);
+
     return MaterialApp(
       title: 'Callio',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple, brightness: Brightness.light),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple, brightness: Brightness.dark),
-        useMaterial3: true,
-      ),
+      debugShowCheckedModeBanner: false,
+      theme: CallioDesign.buildTheme(lightScheme, textTheme),
+      darkTheme: CallioDesign.buildTheme(darkScheme, textTheme),
       themeMode: ThemeMode.system,
-      home: const DashboardScreen(),
+      home: const MainLayout(),
+    );
+  }
+}
+
+class MainLayout extends StatefulWidget {
+  const MainLayout({super.key});
+
+  @override
+  State<MainLayout> createState() => _MainLayoutState();
+}
+
+class _MainLayoutState extends State<MainLayout> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: const [
+          DashboardScreen(),
+          PlaceholderScreen(title: 'Rules Engine'),
+          PlaceholderScreen(title: 'Templates'),
+          PlaceholderScreen(title: 'Settings'),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard_rounded),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.rule_outlined),
+            selectedIcon: Icon(Icons.rule_rounded),
+            label: 'Rules',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.message_outlined),
+            selectedIcon: Icon(Icons.message_rounded),
+            label: 'Templates',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings_rounded),
+            label: 'Settings',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -37,93 +102,166 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
   bool isEnabled = true;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Callio'),
-        actions: [
-          Switch(
-            value: isEnabled,
-            onChanged: (val) {
-              setState(() => isEnabled = val);
-            },
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              elevation: 0,
-              color: Theme.of(context).colorScheme.primaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  children: [
-                    Icon(
-                      isEnabled ? Icons.mark_email_read : Icons.speaker_notes_off,
-                      size: 48,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      isEnabled ? 'Auto-Reply is ACTIVE' : 'Auto-Reply is PAUSED',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar.large(
+            title: const Text('Callio'),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: CallioDesign.spacing16),
+                child: Switch(
+                  value: isEnabled,
+                  onChanged: (val) {
+                    setState(() => isEnabled = val);
+                  },
                 ),
               ),
+            ],
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.all(CallioDesign.spacing16),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                _buildStatusHero(context, colorScheme),
+                const SizedBox(height: CallioDesign.spacing32),
+                Text(
+                  'Overview',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: CallioDesign.spacing16),
+                Row(
+                  children: [
+                    Expanded(child: _buildStatCard(context, '12', 'Missed Calls', Icons.phone_missed)),
+                    const SizedBox(width: CallioDesign.spacing16),
+                    Expanded(child: _buildStatCard(context, '4', 'Auto-Replies', Icons.send)),
+                  ],
+                ),
+                const SizedBox(height: CallioDesign.spacing32),
+                Text(
+                  'Recent Activity',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: CallioDesign.spacing16),
+                _buildActivityTile(context, 'Mom', 'Sent "In a meeting"', '10 mins ago'),
+                _buildActivityTile(context, 'Unknown Number', 'Ignored based on rules', '1 hour ago'),
+                _buildActivityTile(context, 'Boss', 'Sent "Driving right now"', 'Yesterday'),
+              ]),
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Statistics',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: _buildStatCard(context, '0', 'Calls Missed')),
-                const SizedBox(width: 16),
-                Expanded(child: _buildStatCard(context, '0', 'SMS Sent')),
-              ],
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // TODO: Navigate to Templates/Rules UI
-        },
-        child: const Icon(Icons.add_comment),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {},
+        icon: const Icon(Icons.add),
+        label: const Text('New Rule'),
       ),
     );
   }
 
-  Widget _buildStatCard(BuildContext context, String value, String label) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
+  Widget _buildStatusHero(BuildContext context, ColorScheme colorScheme) {
+    return AnimatedContainer(
+      duration: CallioDesign.durationNormal,
+      curve: CallioDesign.curveStandard,
+      padding: const EdgeInsets.all(CallioDesign.spacing32),
+      decoration: BoxDecoration(
+        color: isEnabled ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(CallioDesign.radiusLarge),
       ),
+      child: Column(
+        children: [
+          Icon(
+            isEnabled ? Icons.shield_rounded : Icons.shield_outlined,
+            size: 64,
+            color: isEnabled ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: CallioDesign.spacing16),
+          Text(
+            isEnabled ? 'Protection Active' : 'Protection Paused',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: isEnabled ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: CallioDesign.spacing8),
+          Text(
+            isEnabled ? 'Callio is silently monitoring missed calls in the background.' : 'No auto-replies will be sent.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: isEnabled ? colorScheme.onPrimaryContainer.withOpacity(0.8) : colorScheme.onSurfaceVariant.withOpacity(0.8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(BuildContext context, String value, String label, IconData icon) {
+    final theme = Theme.of(context);
+    return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(CallioDesign.spacing24),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(value, style: Theme.of(context).textTheme.headlineMedium),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            Icon(icon, color: theme.colorScheme.primary),
+            const SizedBox(height: CallioDesign.spacing16),
+            Text(value, style: theme.textTheme.headlineMedium),
+            Text(label, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildActivityTile(BuildContext context, String title, String subtitle, String time) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: CallioDesign.spacing16),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: theme.colorScheme.secondaryContainer,
+            child: Icon(Icons.person, color: theme.colorScheme.onSecondaryContainer),
+          ),
+          const SizedBox(width: CallioDesign.spacing16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.titleMedium),
+                Text(subtitle, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              ],
+            ),
+          ),
+          Text(time, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+}
+
+class PlaceholderScreen extends StatelessWidget {
+  final String title;
+  const PlaceholderScreen({super.key, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Text('$title Screen', style: Theme.of(context).textTheme.headlineMedium),
       ),
     );
   }
