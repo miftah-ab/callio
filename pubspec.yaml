@@ -13,7 +13,7 @@ dependencies:
 
   # UI / Core
   cupertino_icons: ^1.0.6
-  material_color_utilities: ^0.8.0
+  material_color_utilities: ^0.11.1
 
   # State Management & DI
   flutter_riverpod: ^2.4.9
