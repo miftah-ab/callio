@@ -1,131 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:callio/themes/design_system.dart';
-import 'package:callio/data/repositories.dart';
 import 'package:callio/domain/models.dart';
+import 'package:callio/presentation/providers/template_provider.dart';
+import 'package:callio/presentation/widgets/callio_bottom_sheet.dart';
+import 'package:callio/presentation/widgets/callio_text_field.dart';
 
-class ResponsesScreen extends StatefulWidget {
+class ResponsesScreen extends ConsumerWidget {
   const ResponsesScreen({super.key});
 
   @override
-  State<ResponsesScreen> createState() => _ResponsesScreenState();
-}
-
-class _ResponsesScreenState extends State<ResponsesScreen> {
-  final TemplateRepository _repo = TemplateRepository();
-  List<Template> _responses = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadResponses();
-  }
-
-  Future<void> _loadResponses() async {
-    final data = await _repo.getAll();
-    if (mounted) {
-      setState(() {
-        _responses = data;
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final asyncTemplates = ref.watch(templatesProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Responses'),
         centerTitle: false,
       ),
-      body: _isLoading 
-          ? const Center(child: CircularProgressIndicator())
-          : _responses.isEmpty 
-              ? _buildEmptyState(context, colorScheme)
-              : _buildResponsesList(context),
+      body: asyncTemplates.when(
+        data: (responses) => responses.isEmpty
+            ? _buildEmptyState(context, colorScheme)
+            : _buildResponsesList(context, ref, responses),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err')),
+      ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateResponseSheet(context),
+        onPressed: () => _showResponseSheet(context, ref),
         icon: const Icon(Icons.add_comment_rounded),
         label: const Text('New Response'),
       ),
     );
   }
 
-  void _showCreateResponseSheet(BuildContext context) {
-    final nameController = TextEditingController();
-    final contentController = TextEditingController();
-    bool isDefault = false;
-
+  void _showResponseSheet(BuildContext context, WidgetRef ref, {Template? existingTemplate}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: CallioDesign.spacing24,
-                right: CallioDesign.spacing24,
-                top: CallioDesign.spacing24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('New Response', style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: CallioDesign.spacing24),
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Response Name (e.g. Driving)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: CallioDesign.spacing16),
-                  TextField(
-                    controller: contentController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Message Body',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: CallioDesign.spacing16),
-                  SwitchListTile(
-                    title: const Text('Set as Default'),
-                    subtitle: const Text('Use this if no other routine matches'),
-                    value: isDefault,
-                    onChanged: (val) => setSheetState(() => isDefault = val),
-                  ),
-                  const SizedBox(height: CallioDesign.spacing24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () async {
-                        if (nameController.text.isNotEmpty && contentController.text.isNotEmpty) {
-                          await _repo.insert(Template(
-                            name: nameController.text,
-                            content: contentController.text,
-                            isDefault: isDefault,
-                          ));
-                          if (context.mounted) Navigator.pop(context);
-                          _loadResponses();
-                        }
-                      },
-                      child: const Text('Save Response'),
-                    ),
-                  ),
-                  const SizedBox(height: CallioDesign.spacing24),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      builder: (context) => _ResponseEditorSheet(existingTemplate: existingTemplate),
     );
   }
 
@@ -161,17 +76,17 @@ class _ResponsesScreenState extends State<ResponsesScreen> {
     );
   }
 
-  Widget _buildResponsesList(BuildContext context) {
+  Widget _buildResponsesList(BuildContext context, WidgetRef ref, List<Template> responses) {
     return ListView.separated(
       padding: const EdgeInsets.all(CallioDesign.spacing16),
-      itemCount: _responses.length,
+      itemCount: responses.length,
       separatorBuilder: (context, index) => const SizedBox(height: CallioDesign.spacing16),
       itemBuilder: (context, index) {
-        final response = _responses[index];
+        final response = responses[index];
         return Card(
           child: InkWell(
             borderRadius: BorderRadius.circular(CallioDesign.radiusLarge),
-            onTap: () {},
+            onTap: () => _showResponseSheet(context, ref, existingTemplate: response),
             child: Padding(
               padding: const EdgeInsets.all(CallioDesign.spacing24),
               child: Column(
@@ -202,11 +117,16 @@ class _ResponsesScreenState extends State<ResponsesScreen> {
                             ),
                           ),
                         ),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+                        onPressed: () => _confirmDelete(context, ref, response),
+                      )
                     ],
                   ),
                   const SizedBox(height: CallioDesign.spacing12),
                   Container(
                     padding: const EdgeInsets.all(CallioDesign.spacing16),
+                    width: double.infinity,
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
                       borderRadius: BorderRadius.circular(CallioDesign.radiusMedium),
@@ -222,6 +142,139 @@ class _ResponsesScreenState extends State<ResponsesScreen> {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, Template response) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Response?'),
+        content: Text('Are you sure you want to delete "${response.name}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && response.id != null) {
+      HapticFeedback.heavyImpact();
+      ref.read(templatesProvider.notifier).deleteTemplate(response.id!);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Response deleted.')));
+      }
+    }
+  }
+}
+
+class _ResponseEditorSheet extends ConsumerStatefulWidget {
+  final Template? existingTemplate;
+
+  const _ResponseEditorSheet({this.existingTemplate});
+
+  @override
+  ConsumerState<_ResponseEditorSheet> createState() => _ResponseEditorSheetState();
+}
+
+class _ResponseEditorSheetState extends ConsumerState<_ResponseEditorSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameController;
+  late TextEditingController _contentController;
+  late bool _isDefault;
+  bool _hasUnsavedChanges = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.existingTemplate?.name ?? '');
+    _contentController = TextEditingController(text: widget.existingTemplate?.content ?? '');
+    _isDefault = widget.existingTemplate?.isDefault ?? false;
+
+    void _markDirty() {
+      if (!_hasUnsavedChanges) setState(() => _hasUnsavedChanges = true);
+    }
+    _nameController.addListener(_markDirty);
+    _contentController.addListener(_markDirty);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _contentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _errorMessage = null);
+
+    final template = Template(
+      id: widget.existingTemplate?.id,
+      name: _nameController.text.trim(),
+      content: _contentController.text.trim(),
+      isDefault: _isDefault,
+    );
+
+    try {
+      await ref.read(templatesProvider.notifier).saveTemplate(template);
+      HapticFeedback.lightImpact();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+      HapticFeedback.vibrate();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: _formKey,
+      child: CallioBottomSheet(
+        title: widget.existingTemplate == null ? 'New Response' : 'Edit Response',
+        hasUnsavedChanges: _hasUnsavedChanges,
+        onSave: _save,
+        children: [
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(_errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ),
+          CallioTextField(
+            controller: _nameController,
+            labelText: 'Response Name (e.g. Driving)',
+            validator: (value) => value == null || value.trim().isEmpty ? 'Name is required' : null,
+          ),
+          const SizedBox(height: CallioDesign.spacing16),
+          CallioTextField(
+            controller: _contentController,
+            labelText: 'Message Body',
+            maxLines: 3,
+            maxLength: 160,
+            validator: (value) => value == null || value.trim().isEmpty ? 'Message body is required' : null,
+          ),
+          const SizedBox(height: CallioDesign.spacing16),
+          SwitchListTile(
+            title: const Text('Set as Default'),
+            subtitle: const Text('Use this if no other routine matches'),
+            value: _isDefault,
+            onChanged: (val) {
+              setState(() {
+                _isDefault = val;
+                _hasUnsavedChanges = true;
+              });
+            },
+          ),
+        ],
+      ),
     );
   }
 }

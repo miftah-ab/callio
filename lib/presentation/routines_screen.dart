@@ -1,164 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:callio/themes/design_system.dart';
-import 'package:callio/data/repositories.dart';
 import 'package:callio/domain/models.dart';
+import 'package:callio/presentation/providers/rule_provider.dart';
+import 'package:callio/presentation/providers/template_provider.dart';
+import 'package:callio/presentation/widgets/callio_bottom_sheet.dart';
+import 'package:callio/presentation/widgets/callio_text_field.dart';
 
-class RoutinesScreen extends StatefulWidget {
+class RoutinesScreen extends ConsumerWidget {
   const RoutinesScreen({super.key});
 
   @override
-  State<RoutinesScreen> createState() => _RoutinesScreenState();
-}
-
-class _RoutinesScreenState extends State<RoutinesScreen> {
-  final RuleRepository _repo = RuleRepository();
-  List<Rule> _routines = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadRoutines();
-  }
-
-  Future<void> _loadRoutines() async {
-    final data = await _repo.getAll();
-    if (mounted) {
-      setState(() {
-        _routines = data;
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final asyncRules = ref.watch(rulesProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Routines'),
         centerTitle: false,
       ),
-      body: _isLoading 
-          ? const Center(child: CircularProgressIndicator())
-          : _routines.isEmpty 
-              ? _buildEmptyState(context, colorScheme)
-              : _buildRoutinesList(context),
+      body: asyncRules.when(
+        data: (routines) => routines.isEmpty
+            ? _buildEmptyState(context, colorScheme)
+            : _buildRoutinesList(context, ref, routines),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err')),
+      ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateRoutineSheet(context),
+        onPressed: () => _showRoutineSheet(context, ref),
         icon: const Icon(Icons.add_task_rounded),
         label: const Text('New Routine'),
       ),
     );
   }
 
-  void _showCreateRoutineSheet(BuildContext context) async {
-    final nameController = TextEditingController();
-    final groupController = TextEditingController();
-    int priority = 0;
-    
-    // Fetch available templates
-    final templateRepo = TemplateRepository();
-    final templates = await templateRepo.getAll();
-    
-    if (templates.isEmpty && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please create a Response first!')),
-      );
-      return;
-    }
-    
-    int? selectedTemplateId = templates.first.id;
-
-    if (!context.mounted) return;
-
+  void _showRoutineSheet(BuildContext context, WidgetRef ref, {Rule? existingRule}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: CallioDesign.spacing24,
-                right: CallioDesign.spacing24,
-                top: CallioDesign.spacing24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('New Routine', style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: CallioDesign.spacing24),
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Routine Name (e.g. Boss Call)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: CallioDesign.spacing16),
-                  TextField(
-                    controller: groupController,
-                    decoration: const InputDecoration(
-                      labelText: 'Target Number / Group',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: CallioDesign.spacing16),
-                  DropdownButtonFormField<int>(
-                    decoration: const InputDecoration(
-                      labelText: 'Response to send',
-                      border: OutlineInputBorder(),
-                    ),
-                    value: selectedTemplateId,
-                    items: templates.map((t) => DropdownMenuItem(
-                      value: t.id,
-                      child: Text(t.name),
-                    )).toList(),
-                    onChanged: (val) {
-                      setSheetState(() => selectedTemplateId = val);
-                    },
-                  ),
-                  const SizedBox(height: CallioDesign.spacing16),
-                  Text('Priority (Higher executes first): $priority'),
-                  Slider(
-                    value: priority.toDouble(),
-                    min: 0,
-                    max: 100,
-                    divisions: 10,
-                    label: priority.toString(),
-                    onChanged: (val) => setSheetState(() => priority = val.toInt()),
-                  ),
-                  const SizedBox(height: CallioDesign.spacing24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () async {
-                        if (nameController.text.isNotEmpty && selectedTemplateId != null) {
-                          await _repo.insert(Rule(
-                            name: nameController.text,
-                            contactGroup: groupController.text,
-                            templateId: selectedTemplateId!,
-                            priority: priority,
-                          ));
-                          if (context.mounted) Navigator.pop(context);
-                          _loadRoutines();
-                        }
-                      },
-                      child: const Text('Save Routine'),
-                    ),
-                  ),
-                  const SizedBox(height: CallioDesign.spacing24),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      builder: (context) => _RoutineEditorSheet(existingRule: existingRule),
     );
   }
 
@@ -194,17 +77,17 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     );
   }
 
-  Widget _buildRoutinesList(BuildContext context) {
+  Widget _buildRoutinesList(BuildContext context, WidgetRef ref, List<Rule> routines) {
     return ListView.separated(
       padding: const EdgeInsets.all(CallioDesign.spacing16),
-      itemCount: _routines.length,
+      itemCount: routines.length,
       separatorBuilder: (context, index) => const SizedBox(height: CallioDesign.spacing16),
       itemBuilder: (context, index) {
-        final routine = _routines[index];
+        final routine = routines[index];
         return Card(
           child: InkWell(
             borderRadius: BorderRadius.circular(CallioDesign.radiusLarge),
-            onTap: () {},
+            onTap: () => _showRoutineSheet(context, ref, existingRule: routine),
             child: Padding(
               padding: const EdgeInsets.all(CallioDesign.spacing24),
               child: Column(
@@ -213,16 +96,31 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        routine.name.isEmpty ? 'Custom Routine' : routine.name,
-                        style: Theme.of(context).textTheme.titleLarge,
+                      Expanded(
+                        child: Text(
+                          routine.name.isEmpty ? 'Custom Routine' : routine.name,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
                       Switch(
                         value: routine.isActive,
                         onChanged: (val) {
-                          // Toggle logic
+                          // Fast optimistic UI update could go here
+                          final updated = Rule(
+                            id: routine.id,
+                            name: routine.name,
+                            contactGroup: routine.contactGroup,
+                            templateId: routine.templateId,
+                            priority: routine.priority,
+                            isActive: val,
+                          );
+                          ref.read(rulesProvider.notifier).saveRule(updated);
                         },
                       ),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+                        onPressed: () => _confirmDelete(context, ref, routine),
+                      )
                     ],
                   ),
                   const SizedBox(height: CallioDesign.spacing8),
@@ -247,6 +145,186 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, Rule rule) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Routine?'),
+        content: Text('Are you sure you want to delete "${rule.name}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && rule.id != null) {
+      HapticFeedback.heavyImpact();
+      ref.read(rulesProvider.notifier).deleteRule(rule.id!);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Routine deleted.')));
+      }
+    }
+  }
+}
+
+class _RoutineEditorSheet extends ConsumerStatefulWidget {
+  final Rule? existingRule;
+
+  const _RoutineEditorSheet({this.existingRule});
+
+  @override
+  ConsumerState<_RoutineEditorSheet> createState() => _RoutineEditorSheetState();
+}
+
+class _RoutineEditorSheetState extends ConsumerState<_RoutineEditorSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameController;
+  late TextEditingController _groupController;
+  late int _priority;
+  int? _selectedTemplateId;
+  bool _hasUnsavedChanges = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.existingRule?.name ?? '');
+    _groupController = TextEditingController(text: widget.existingRule?.contactGroup ?? '');
+    _priority = widget.existingRule?.priority ?? 0;
+    _selectedTemplateId = widget.existingRule?.templateId;
+
+    void _markDirty() {
+      if (!_hasUnsavedChanges) setState(() => _hasUnsavedChanges = true);
+    }
+    _nameController.addListener(_markDirty);
+    _groupController.addListener(_markDirty);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _groupController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedTemplateId == null) {
+      setState(() => _errorMessage = 'Please select a Response to send.');
+      return;
+    }
+    
+    setState(() => _errorMessage = null);
+
+    final rule = Rule(
+      id: widget.existingRule?.id,
+      name: _nameController.text.trim(),
+      contactGroup: _groupController.text.trim(),
+      templateId: _selectedTemplateId!,
+      priority: _priority,
+      isActive: widget.existingRule?.isActive ?? true,
+    );
+
+    try {
+      await ref.read(rulesProvider.notifier).saveRule(rule);
+      HapticFeedback.lightImpact();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+      HapticFeedback.vibrate();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final templatesState = ref.watch(templatesProvider);
+
+    return Form(
+      key: _formKey,
+      child: CallioBottomSheet(
+        title: widget.existingRule == null ? 'New Routine' : 'Edit Routine',
+        hasUnsavedChanges: _hasUnsavedChanges,
+        onSave: _save,
+        children: [
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(_errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ),
+            
+          CallioTextField(
+            controller: _nameController,
+            labelText: 'Routine Name (e.g. Boss Call)',
+            validator: (value) => value == null || value.trim().isEmpty ? 'Name is required' : null,
+          ),
+          const SizedBox(height: CallioDesign.spacing16),
+          CallioTextField(
+            controller: _groupController,
+            labelText: 'Target Number / Group',
+            validator: (value) => value == null || value.trim().isEmpty ? 'Target is required' : null,
+          ),
+          const SizedBox(height: CallioDesign.spacing16),
+          
+          templatesState.when(
+            data: (templates) {
+              if (templates.isEmpty) {
+                return const Text('Please create a Response first in the Responses tab.', style: TextStyle(color: Colors.red));
+              }
+              // Ensure selectedTemplateId is valid or default to first
+              if (_selectedTemplateId == null || !templates.any((t) => t.id == _selectedTemplateId)) {
+                _selectedTemplateId = templates.first.id;
+              }
+              return DropdownButtonFormField<int>(
+                decoration: InputDecoration(
+                  labelText: 'Response to send',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(CallioDesign.radiusMedium)),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                ),
+                value: _selectedTemplateId,
+                items: templates.map((t) => DropdownMenuItem(
+                  value: t.id,
+                  child: Text(t.name),
+                )).toList(),
+                onChanged: (val) {
+                  setState(() {
+                    _selectedTemplateId = val;
+                    _hasUnsavedChanges = true;
+                  });
+                },
+              );
+            },
+            loading: () => const CircularProgressIndicator(),
+            error: (err, stack) => Text('Error loading templates: $err'),
+          ),
+          
+          const SizedBox(height: CallioDesign.spacing16),
+          Text('Priority (Higher executes first): $_priority'),
+          Slider(
+            value: _priority.toDouble(),
+            min: 0,
+            max: 100,
+            divisions: 10,
+            label: _priority.toString(),
+            onChanged: (val) {
+              setState(() {
+                _priority = val.toInt();
+                _hasUnsavedChanges = true;
+              });
+            },
+          ),
+        ],
+      ),
     );
   }
 }

@@ -13,6 +13,11 @@ class TemplateRepository {
     final result = await db.query('templates');
     return result.map((json) => Template.fromMap(json)).toList();
   }
+
+  Future<int> delete(int id) async {
+    final db = await LocalDatabase.instance.database;
+    return await db.delete('templates', where: 'id = ?', whereArgs: [id]);
+  }
 }
 
 class RuleRepository {
@@ -25,6 +30,11 @@ class RuleRepository {
     final db = await LocalDatabase.instance.database;
     final result = await db.query('rules');
     return result.map((json) => Rule.fromMap(json)).toList();
+  }
+
+  Future<int> delete(int id) async {
+    final db = await LocalDatabase.instance.database;
+    return await db.delete('rules', where: 'id = ?', whereArgs: [id]);
   }
 }
 
