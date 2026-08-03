@@ -34,7 +34,97 @@ class CallioApp extends ConsumerWidget {
       theme: CallioDesign.buildTheme(lightScheme, textTheme),
       darkTheme: CallioDesign.buildTheme(darkScheme, textTheme),
       themeMode: ThemeMode.system,
-      home: const MainLayout(),
+      home: const Callio3DSplashScreen(),
+    );
+  }
+}
+
+class Callio3DSplashScreen extends StatefulWidget {
+  const Callio3DSplashScreen({super.key});
+
+  @override
+  State<Callio3DSplashScreen> createState() => _Callio3DSplashScreenState();
+}
+
+class _Callio3DSplashScreenState extends State<Callio3DSplashScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _rotationAnimation;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 2500));
+    
+    _rotationAnimation = Tween<double>(begin: -1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+    );
+    
+    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+    );
+
+    _fadeAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.8, 1.0, curve: Curves.easeIn)),
+    );
+
+    _controller.forward().then((_) {
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 800),
+          pageBuilder: (context, animation, secondaryAnimation) => const MainLayout(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A), // Deep elegant slate matching native splash
+      body: Center(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return FadeTransition(
+              opacity: _fadeAnimation,
+              child: Transform(
+                alignment: FractionalOffset.center,
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.002) // Perspective for 3D effect
+                  ..rotateX(_rotationAnimation.value)
+                  ..rotateY(_rotationAnimation.value * 0.5)
+                  ..scale(_scaleAnimation.value),
+                child: Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4F46E5).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(36),
+                    border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.5), width: 2),
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.5), blurRadius: 40, spreadRadius: 10),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.forum_rounded, size: 72, color: Colors.white),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
