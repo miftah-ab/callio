@@ -47,14 +47,85 @@ class _ResponsesScreenState extends State<ResponsesScreen> {
               ? _buildEmptyState(context, colorScheme)
               : _buildResponsesList(context),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Response Editor coming soon!')),
-          );
-        },
+        onPressed: () => _showCreateResponseSheet(context),
         icon: const Icon(Icons.add_comment_rounded),
         label: const Text('New Response'),
       ),
+    );
+  }
+
+  void _showCreateResponseSheet(BuildContext context) {
+    final nameController = TextEditingController();
+    final contentController = TextEditingController();
+    bool isDefault = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: CallioDesign.spacing24,
+                right: CallioDesign.spacing24,
+                top: CallioDesign.spacing24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('New Response', style: Theme.of(context).textTheme.headlineSmall),
+                  const SizedBox(height: CallioDesign.spacing24),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Response Name (e.g. Driving)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: CallioDesign.spacing16),
+                  TextField(
+                    controller: contentController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Message Body',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: CallioDesign.spacing16),
+                  SwitchListTile(
+                    title: const Text('Set as Default'),
+                    subtitle: const Text('Use this if no other routine matches'),
+                    value: isDefault,
+                    onChanged: (val) => setSheetState(() => isDefault = val),
+                  ),
+                  const SizedBox(height: CallioDesign.spacing24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () async {
+                        if (nameController.text.isNotEmpty && contentController.text.isNotEmpty) {
+                          await _repo.insert(Template(
+                            name: nameController.text,
+                            content: contentController.text,
+                            isDefault: isDefault,
+                          ));
+                          if (context.mounted) Navigator.pop(context);
+                          _loadResponses();
+                        }
+                      },
+                      child: const Text('Save Response'),
+                    ),
+                  ),
+                  const SizedBox(height: CallioDesign.spacing24),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

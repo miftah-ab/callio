@@ -47,15 +47,118 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
               ? _buildEmptyState(context, colorScheme)
               : _buildRoutinesList(context),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // TODO: Open Create Routine Bottom Sheet
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Routine Builder coming soon!')),
-          );
-        },
+        onPressed: () => _showCreateRoutineSheet(context),
         icon: const Icon(Icons.add_task_rounded),
         label: const Text('New Routine'),
       ),
+    );
+  }
+
+  void _showCreateRoutineSheet(BuildContext context) async {
+    final nameController = TextEditingController();
+    final groupController = TextEditingController();
+    int priority = 0;
+    
+    // Fetch available templates
+    final templateRepo = TemplateRepository();
+    final templates = await templateRepo.getAll();
+    
+    if (templates.isEmpty && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please create a Response first!')),
+      );
+      return;
+    }
+    
+    int? selectedTemplateId = templates.first.id;
+
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: CallioDesign.spacing24,
+                right: CallioDesign.spacing24,
+                top: CallioDesign.spacing24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('New Routine', style: Theme.of(context).textTheme.headlineSmall),
+                  const SizedBox(height: CallioDesign.spacing24),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Routine Name (e.g. Boss Call)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: CallioDesign.spacing16),
+                  TextField(
+                    controller: groupController,
+                    decoration: const InputDecoration(
+                      labelText: 'Target Number / Group',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: CallioDesign.spacing16),
+                  DropdownButtonFormField<int>(
+                    decoration: const InputDecoration(
+                      labelText: 'Response to send',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: selectedTemplateId,
+                    items: templates.map((t) => DropdownMenuItem(
+                      value: t.id,
+                      child: Text(t.name),
+                    )).toList(),
+                    onChanged: (val) {
+                      setSheetState(() => selectedTemplateId = val);
+                    },
+                  ),
+                  const SizedBox(height: CallioDesign.spacing16),
+                  Text('Priority (Higher executes first): $priority'),
+                  Slider(
+                    value: priority.toDouble(),
+                    min: 0,
+                    max: 100,
+                    divisions: 10,
+                    label: priority.toString(),
+                    onChanged: (val) => setSheetState(() => priority = val.toInt()),
+                  ),
+                  const SizedBox(height: CallioDesign.spacing24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () async {
+                        if (nameController.text.isNotEmpty && selectedTemplateId != null) {
+                          await _repo.insert(Rule(
+                            name: nameController.text,
+                            contactGroup: groupController.text,
+                            templateId: selectedTemplateId!,
+                            priority: priority,
+                          ));
+                          if (context.mounted) Navigator.pop(context);
+                          _loadRoutines();
+                        }
+                      },
+                      child: const Text('Save Routine'),
+                    ),
+                  ),
+                  const SizedBox(height: CallioDesign.spacing24),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
