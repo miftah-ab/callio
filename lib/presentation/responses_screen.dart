@@ -123,7 +123,7 @@ class ResponsesScreen extends ConsumerWidget {
                       )
                     ],
                   ),
-                  const SizedBox(height: CallioDesign.spacing12),
+                  const SizedBox(height: CallioDesign.spacing16),
                   Container(
                     padding: const EdgeInsets.all(CallioDesign.spacing16),
                     width: double.infinity,
