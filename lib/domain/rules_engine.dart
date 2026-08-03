@@ -15,7 +15,13 @@ class RulesEngine {
       return;
     }
 
-    // 2. Fetch all rules and templates
+    // 2. Throttling: Check if we recently replied to this number (e.g., within the last 15 minutes)
+    final bool recentlyReplied = await _logRepo.hasRepliedRecently(phoneNumber, const Duration(minutes: 15));
+    if (recentlyReplied) {
+      return; // Do not spam
+    }
+
+    // 3. Fetch all rules and templates
     final rules = await _ruleRepo.getAll();
     final templates = await _templateRepo.getAll();
 
@@ -23,19 +29,18 @@ class RulesEngine {
       return; // Nothing to send
     }
 
-    // For this MVP, we find the first active rule. 
-    // In a full implementation, we'd check if the phoneNumber belongs to the rule's contactGroup.
-    // Right now, if no rule matches, we fall back to the default template.
-    
+    // 4. Priority Resolution: Filter active rules and sort by priority (highest first)
+    final activeRules = rules.where((r) => r.isActive).toList();
+    activeRules.sort((a, b) => b.priority.compareTo(a.priority));
+
+    // For this MVP, we find the highest priority active rule. 
+    // (In a full implementation, we'd also check if the phoneNumber belongs to the rule's contactGroup here).
     Rule? matchedRule;
-    try {
-      matchedRule = rules.firstWhere((r) => r.isActive);
-    } catch (e) {
-      matchedRule = null;
+    if (activeRules.isNotEmpty) {
+      matchedRule = activeRules.first;
     }
 
     Template? templateToSend;
-
     if (matchedRule != null) {
       try {
         templateToSend = templates.firstWhere((t) => t.id == matchedRule!.templateId);
@@ -53,7 +58,7 @@ class RulesEngine {
       }
     }
 
-    // 3. Handle delay
+    // 5. Handle delay
     final delaySeconds = SettingsStorage.getGlobalDelay();
     if (delaySeconds > 0) {
       await Future.delayed(Duration(seconds: delaySeconds));

@@ -39,4 +39,17 @@ class SmsLogRepository {
     final result = await db.query('logs', orderBy: 'id DESC');
     return result.map((json) => SmsLog.fromMap(json)).toList();
   }
+
+  Future<bool> hasRepliedRecently(String phoneNumber, Duration window) async {
+    final db = await LocalDatabase.instance.database;
+    final threshold = DateTime.now().subtract(window).toIso8601String();
+    
+    final result = await db.query(
+      'logs',
+      where: 'phoneNumber = ? AND timeSent > ?',
+      whereArgs: [phoneNumber, threshold],
+      limit: 1,
+    );
+    return result.isNotEmpty;
+  }
 }

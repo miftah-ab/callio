@@ -32,22 +32,28 @@ class Template {
 
 class Rule {
   final int? id;
+  final String name;
   final String contactGroup;
   final int templateId;
+  final int priority;
   final bool isActive;
 
   Rule({
     this.id,
+    required this.name,
     required this.contactGroup,
     required this.templateId,
+    this.priority = 0,
     this.isActive = true,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'name': name,
       'contactGroup': contactGroup,
       'templateId': templateId,
+      'priority': priority,
       'isActive': isActive ? 1 : 0,
     };
   }
@@ -55,8 +61,10 @@ class Rule {
   factory Rule.fromMap(Map<String, dynamic> map) {
     return Rule(
       id: map['id']?.toInt(),
+      name: map['name'] ?? '',
       contactGroup: map['contactGroup'] ?? '',
       templateId: map['templateId']?.toInt() ?? 0,
+      priority: map['priority']?.toInt() ?? 0,
       isActive: map['isActive'] == 1,
     );
   }

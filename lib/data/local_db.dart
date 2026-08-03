@@ -41,8 +41,10 @@ CREATE TABLE templates (
     await db.execute('''
 CREATE TABLE rules (
   id $idType,
+  name $textType,
   contactGroup $textType,
   templateId INTEGER NOT NULL,
+  priority INTEGER NOT NULL DEFAULT 0,
   isActive $boolType,
   FOREIGN KEY (templateId) REFERENCES templates (id)
 )
@@ -56,6 +58,9 @@ CREATE TABLE logs (
   status $textType
 )
 ''');
+
+    // Index for fast throttling queries (e.g., checking if we replied to this number recently)
+    await db.execute('CREATE INDEX idx_logs_phone_time ON logs(phoneNumber, timeSent)');
   }
 
   Future close() async {
