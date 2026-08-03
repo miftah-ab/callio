@@ -37,10 +37,10 @@ jobs:
       - name: Upgrade Kotlin Version
         run: |
           if [ -f "android/settings.gradle" ]; then
-            sed -i -E 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/g' android/settings.gradle
+            sed -i -E 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "2.0.0"/g' android/settings.gradle
           fi
           if [ -f "android/build.gradle" ]; then
-            sed -i -E "s/ext.kotlin_version = '[^']*'/ext.kotlin_version = '1.9.24'/g" android/build.gradle
+            sed -i -E "s/ext.kotlin_version = '[^']*'/ext.kotlin_version = '2.0.0'/g" android/build.gradle
           fi
 
       - name: Restore custom native files
