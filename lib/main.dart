@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:callio/themes/design_system.dart';
 import 'package:callio/presentation/onboarding_screen.dart';
+import 'package:callio/presentation/routines_screen.dart';
+import 'package:callio/presentation/responses_screen.dart';
 
 void main() {
   SystemChrome.setSystemUIOverlayStyle(
@@ -142,8 +144,8 @@ class _MainLayoutState extends State<MainLayout> {
 
   final List<Widget> _pages = const [
     DashboardScreen(),
-    PlaceholderScreen(title: 'Routines'),
-    PlaceholderScreen(title: 'Responses'),
+    RoutinesScreen(),
+    ResponsesScreen(),
     PlaceholderScreen(title: 'Settings'),
   ];
 
